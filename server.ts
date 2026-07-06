@@ -47,7 +47,7 @@ async function startServer() {
   });
 
   // API: User Registration (Unauthenticated)
-  app.post('/api/register', (req: Request, res: Response) => {
+  app.post('/api/register', async (req: Request, res: Response) => {
     try {
       const { username, password } = req.body;
       if (!username || !password) {
@@ -55,7 +55,7 @@ async function startServer() {
         return;
       }
 
-      const registered = db.registerUser(username, password);
+      const registered = await db.registerUser(username, password);
       if (registered) {
         res.json({ message: 'User registered successfully!' });
       } else {
@@ -68,7 +68,7 @@ async function startServer() {
   });
 
   // API: User Login (Unauthenticated)
-  app.post('/api/login', (req: Request, res: Response) => {
+  app.post('/api/login', async (req: Request, res: Response) => {
     try {
       const { username, password } = req.body;
       if (!username || !password) {
@@ -76,7 +76,7 @@ async function startServer() {
         return;
       }
 
-      const authenticated = db.authenticateUser(username, password);
+      const authenticated = await db.authenticateUser(username, password);
       if (authenticated) {
         const cleanUsername = username.trim().toLowerCase();
         res.json({ 
@@ -93,9 +93,9 @@ async function startServer() {
   });
 
   // API: Get Profile & Setup state
-  app.get('/api/profile', authenticate, (req: Request, res: Response) => {
+  app.get('/api/profile', authenticate, async (req: Request, res: Response) => {
     const username = (req as any).username;
-    const data = db.readUser(username);
+    const data = await db.readUser(username);
     res.json({
       profile: data.profile,
       isSetup: !!data.profile,
@@ -104,7 +104,7 @@ async function startServer() {
   });
 
   // API: Initial Setup (Name, Start Date, Hours, Revision Day)
-  app.post('/api/setup', authenticate, (req: Request, res: Response) => {
+  app.post('/api/setup', authenticate, async (req: Request, res: Response) => {
     try {
       const username = (req as any).username;
       const { name, startDate, studyHoursPerDay, workingHours, preferredRevisionDay } = req.body;
@@ -127,7 +127,7 @@ async function startServer() {
       const roadmap = generate180DayRoadmap(startDate, preferredRevisionDay);
 
       // Save to database
-      db.writeUser(username, {
+      await db.writeUser(username, {
         profile,
         roadmap,
         commits: [],
@@ -143,10 +143,10 @@ async function startServer() {
   });
 
   // API: Get Dashboard Metrics
-  app.get('/api/dashboard', authenticate, (req: Request, res: Response) => {
+  app.get('/api/dashboard', authenticate, async (req: Request, res: Response) => {
     try {
       const username = (req as any).username;
-      const data = db.readUser(username);
+      const data = await db.readUser(username);
       if (!data.profile) {
         res.status(400).json({ error: 'User is not set up yet.' });
         return;
@@ -225,7 +225,7 @@ async function startServer() {
   });
 
   // API: Update daily progress (yesterday's status check-in)
-  app.post('/api/complete-task', authenticate, (req: Request, res: Response) => {
+  app.post('/api/complete-task', authenticate, async (req: Request, res: Response) => {
     try {
       const username = (req as any).username;
       const { dayNumber, status, partialPercent } = req.body;
@@ -235,7 +235,7 @@ async function startServer() {
         return;
       }
 
-      const data = db.readUser(username);
+      const data = await db.readUser(username);
       if (!data.profile) {
         res.status(400).json({ error: 'User is not set up.' });
         return;
@@ -281,7 +281,7 @@ async function startServer() {
         };
       }
 
-      db.writeUser(username, { roadmap: updatedRoadmap });
+      await db.writeUser(username, { roadmap: updatedRoadmap });
 
       res.json({
         message: 'Daily progress recorded and rescheduled if needed.',
@@ -295,14 +295,14 @@ async function startServer() {
   });
 
   // API: Get full roadmap
-  app.get('/api/roadmap', authenticate, (req: Request, res: Response) => {
+  app.get('/api/roadmap', authenticate, async (req: Request, res: Response) => {
     const username = (req as any).username;
-    const data = db.readUser(username);
+    const data = await db.readUser(username);
     res.json(data.roadmap);
   });
 
   // API: Post GitHub commit history
-  app.post('/api/github-commit', authenticate, (req: Request, res: Response) => {
+  app.post('/api/github-commit', authenticate, async (req: Request, res: Response) => {
     try {
       const username = (req as any).username;
       const { dayNumber, repoName, commitLink } = req.body;
@@ -312,7 +312,7 @@ async function startServer() {
         return;
       }
 
-      const data = db.readUser(username);
+      const data = await db.readUser(username);
       const newCommit: CommitLog = {
         id: `commit_${Date.now()}`,
         dayNumber: Number(dayNumber),
@@ -322,7 +322,7 @@ async function startServer() {
       };
 
       const updatedCommits = [...data.commits, newCommit];
-      db.writeUser(username, { commits: updatedCommits });
+      await db.writeUser(username, { commits: updatedCommits });
 
       res.json({ message: 'GitHub commit logged successfully!', commit: newCommit });
     } catch (error) {
@@ -332,21 +332,21 @@ async function startServer() {
   });
 
   // API: Get GitHub logs
-  app.get('/api/github-commits', authenticate, (req: Request, res: Response) => {
+  app.get('/api/github-commits', authenticate, async (req: Request, res: Response) => {
     const username = (req as any).username;
-    const data = db.readUser(username);
+    const data = await db.readUser(username);
     res.json(data.commits);
   });
 
   // API: Get Resume Projects
-  app.get('/api/resume-projects', authenticate, (req: Request, res: Response) => {
+  app.get('/api/resume-projects', authenticate, async (req: Request, res: Response) => {
     const username = (req as any).username;
-    const data = db.readUser(username);
+    const data = await db.readUser(username);
     res.json(data.resumeProjects);
   });
 
   // API: Save Resume Project
-  app.post('/api/resume-projects', authenticate, (req: Request, res: Response) => {
+  app.post('/api/resume-projects', authenticate, async (req: Request, res: Response) => {
     try {
       const username = (req as any).username;
       const project: ResumeProject = req.body;
@@ -355,12 +355,12 @@ async function startServer() {
         return;
       }
 
-      const data = db.readUser(username);
+      const data = await db.readUser(username);
       // Remove if duplicate ID, then add
       const filtered = data.resumeProjects.filter(p => p.id !== project.id);
       const updated = [...filtered, project];
 
-      db.writeUser(username, { resumeProjects: updated });
+      await db.writeUser(username, { resumeProjects: updated });
       res.json({ message: 'Resume project saved!', projects: updated });
     } catch (error) {
       console.error('Error saving resume project:', error);
@@ -372,7 +372,7 @@ async function startServer() {
   app.get('/api/mentor-advice', authenticate, async (req: Request, res: Response) => {
     try {
       const username = (req as any).username;
-      const data = db.readUser(username);
+      const data = await db.readUser(username);
       if (!data.profile) {
         res.status(400).json({ error: 'Profile not set up.' });
         return;
@@ -416,7 +416,7 @@ async function startServer() {
   });
 
   // API: Get Specific Weekly Report
-  app.get('/api/weekly-report/:week', authenticate, (req: Request, res: Response) => {
+  app.get('/api/weekly-report/:week', authenticate, async (req: Request, res: Response) => {
     try {
       const username = (req as any).username;
       const week = Number(req.params.week);
@@ -425,7 +425,7 @@ async function startServer() {
         return;
       }
 
-      const data = db.readUser(username);
+      const data = await db.readUser(username);
       if (!data.profile) {
         res.status(400).json({ error: 'Setup profile first.' });
         return;
@@ -440,7 +440,7 @@ async function startServer() {
   });
 
   // API: Get Specific Monthly Report
-  app.get('/api/monthly-report/:month', authenticate, (req: Request, res: Response) => {
+  app.get('/api/monthly-report/:month', authenticate, async (req: Request, res: Response) => {
     try {
       const username = (req as any).username;
       const month = Number(req.params.month);
@@ -449,7 +449,7 @@ async function startServer() {
         return;
       }
 
-      const data = db.readUser(username);
+      const data = await db.readUser(username);
       if (!data.profile) {
         res.status(400).json({ error: 'Setup profile first.' });
         return;
@@ -464,9 +464,9 @@ async function startServer() {
   });
 
   // API: Reset Application
-  app.post('/api/reset', authenticate, (req: Request, res: Response) => {
+  app.post('/api/reset', authenticate, async (req: Request, res: Response) => {
     const username = (req as any).username;
-    db.resetUser(username);
+    await db.resetUser(username);
     res.json({ message: 'DevOps Mentor reset to factory default state.' });
   });
 

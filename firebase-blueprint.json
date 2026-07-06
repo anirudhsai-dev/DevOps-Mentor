@@ -1,0 +1,51 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Unified document storing user auth, profile, and 180-day roadmap progression data",
+      "type": "object",
+      "properties": {
+        "username": {
+          "type": "string",
+          "description": "Unique identifier of the user (lowercase)"
+        },
+        "password": {
+          "type": "string",
+          "description": "Secure operator credentials"
+        },
+        "profile": {
+          "type": "object",
+          "description": "The user's setup parameters, schedule preference, and start dates"
+        },
+        "roadmap": {
+          "type": "array",
+          "description": "180-day syllabus lessons list tracking completion and rescheduling metrics"
+        },
+        "commits": {
+          "type": "array",
+          "description": "Logged GitHub commits with links and timestamps"
+        },
+        "resumeProjects": {
+          "type": "array",
+          "description": "Portfolio capstones generated and flagged for resume compilation"
+        },
+        "weeklyReports": {
+          "type": "array",
+          "description": "Cached reports or generated performance indicators"
+        },
+        "lastUpdate": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC timestamp of the last user interaction"
+        }
+      },
+      "required": ["username", "password", "lastUpdate"]
+    }
+  },
+  "firestore": {
+    "/users/{username}": {
+      "schema": "User",
+      "description": "User account and custom progress roadmap tracking store"
+    }
+  }
+}
