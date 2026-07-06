@@ -38,9 +38,12 @@ export default function App() {
         if (data.isSetup) {
           await fetchAllData();
         }
+      } else {
+        setIsSetup(false);
       }
     } catch (error) {
       console.error('Error checking setup state:', error);
+      setIsSetup(false);
     } finally {
       setLoading(false);
     }
