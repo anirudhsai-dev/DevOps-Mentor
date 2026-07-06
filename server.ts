@@ -5,11 +5,11 @@
 
 import express, { Request, Response } from 'express';
 import path from 'path';
-import { DatabaseManager } from './server/database';
-import { generate180DayRoadmap } from './server/roadmap';
-import { PlannerService } from './server/planner';
-import { MentorService } from './server/mentor';
-import { ReportsService } from './server/reports';
+import { DatabaseManager } from './server-core/database';
+import { generate180DayRoadmap } from './server-core/roadmap';
+import { PlannerService } from './server-core/planner';
+import { MentorService } from './server-core/mentor';
+import { ReportsService } from './server-core/reports';
 import { UserProfile, RoadmapDay, CommitLog, ResumeProject, DashboardData } from './src/types';
 
 // Load environment variables
