@@ -4,16 +4,17 @@
  */
 
 import React from 'react';
-import { Terminal, RefreshCw, BarChart2, Calendar, FileText, Code2, Cpu, Sparkles } from 'lucide-react';
+import { Terminal, RefreshCw, BarChart2, Calendar, FileText, Code2, Cpu, Sparkles, LogOut } from 'lucide-react';
 
 interface HeaderProps {
   operatorName: string;
   activeTab: string;
   setActiveTab: (tab: string) => void;
   onReset: () => void;
+  onLogout: () => void;
 }
 
-export default function Header({ operatorName, activeTab, setActiveTab, onReset }: HeaderProps) {
+export default function Header({ operatorName, activeTab, setActiveTab, onReset, onLogout }: HeaderProps) {
   const navItems = [
     { id: 'dashboard', label: 'Console', icon: Cpu },
     { id: 'roadmap', label: '180-Day Syllabus', icon: Calendar },
@@ -68,7 +69,7 @@ export default function Header({ operatorName, activeTab, setActiveTab, onReset 
             })}
           </nav>
 
-          {/* System Reset Utility */}
+          {/* Utilities: Reset & Logout */}
           <div className="flex items-center gap-2">
             <button
               onClick={onReset}
@@ -76,7 +77,15 @@ export default function Header({ operatorName, activeTab, setActiveTab, onReset 
               title="Reset configuration and erase all logged metrics"
             >
               <RefreshCw className="w-3.5 h-3.5" />
-              <span>FACTORY_RESET</span>
+              <span>RESET</span>
+            </button>
+            <button
+              onClick={onLogout}
+              className="px-2.5 py-1.5 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-850 text-zinc-400 hover:text-zinc-200 rounded text-xs font-mono transition-all flex items-center gap-1.5 cursor-pointer"
+              title="Logout session"
+            >
+              <LogOut className="w-3.5 h-3.5 text-emerald-500" />
+              <span>LOGOUT</span>
             </button>
           </div>
 

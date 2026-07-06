@@ -5,10 +5,10 @@
 
 import fs from 'fs';
 import path from 'path';
-import { UserProfile, RoadmapDay, CommitLog, ResumeProject, WeeklyReport, AnalyticsStats } from '../src/types';
+import { UserProfile, RoadmapDay, CommitLog, ResumeProject, WeeklyReport } from '../src/types';
 
 const DB_DIR = path.join(process.cwd(), 'database');
-const DB_FILE = path.join(DB_DIR, 'progress.json');
+const USERS_DIR = path.join(DB_DIR, 'users');
 
 export interface DatabaseSchema {
   profile: UserProfile | null;
@@ -21,10 +21,9 @@ export interface DatabaseSchema {
 
 export class DatabaseManager {
   private static instance: DatabaseManager;
-  private cache: DatabaseSchema | null = null;
 
   private constructor() {
-    this.ensureDirectoryAndFile();
+    this.ensureDirectories();
   }
 
   public static getInstance(): DatabaseManager {
@@ -34,47 +33,104 @@ export class DatabaseManager {
     return DatabaseManager.instance;
   }
 
-  private ensureDirectoryAndFile(): void {
+  private ensureDirectories(): void {
     if (!fs.existsSync(DB_DIR)) {
       fs.mkdirSync(DB_DIR, { recursive: true });
     }
-
-    if (!fs.existsSync(DB_FILE)) {
-      const initialSchema: DatabaseSchema = {
-        profile: null,
-        roadmap: [],
-        commits: [],
-        resumeProjects: [],
-        weeklyReports: [],
-        lastUpdate: new Date().toISOString()
-      };
-      fs.writeFileSync(DB_FILE, JSON.stringify(initialSchema, null, 2), 'utf-8');
+    if (!fs.existsSync(USERS_DIR)) {
+      fs.mkdirSync(USERS_DIR, { recursive: true });
     }
   }
 
-  public read(): DatabaseSchema {
+  public registerUser(username: string, password: string): boolean {
+    this.ensureDirectories();
+    const cleanUsername = username.trim().toLowerCase();
+    
+    if (!cleanUsername || !password) {
+      return false;
+    }
+
+    const authFile = path.join(USERS_DIR, `${cleanUsername}_auth.json`);
+    if (fs.existsSync(authFile)) {
+      return false; // User already exists
+    }
+
+    const authData = {
+      username: cleanUsername,
+      password: password // simple plain text password as requested
+    };
+
+    const initialSchema: DatabaseSchema = {
+      profile: null,
+      roadmap: [],
+      commits: [],
+      resumeProjects: [],
+      weeklyReports: [],
+      lastUpdate: new Date().toISOString()
+    };
+
+    const progressFile = path.join(USERS_DIR, `${cleanUsername}_progress.json`);
+
     try {
-      this.ensureDirectoryAndFile();
-      const content = fs.readFileSync(DB_FILE, 'utf-8');
-      this.cache = JSON.parse(content) as DatabaseSchema;
-      return this.cache;
+      fs.writeFileSync(authFile, JSON.stringify(authData, null, 2), 'utf-8');
+      fs.writeFileSync(progressFile, JSON.stringify(initialSchema, null, 2), 'utf-8');
+      return true;
+    } catch (e) {
+      console.error('Error during user registration:', e);
+      return false;
+    }
+  }
+
+  public authenticateUser(username: string, password: string): boolean {
+    this.ensureDirectories();
+    const cleanUsername = username.trim().toLowerCase();
+    const authFile = path.join(USERS_DIR, `${cleanUsername}_auth.json`);
+
+    if (!fs.existsSync(authFile)) {
+      return false;
+    }
+
+    try {
+      const authContent = fs.readFileSync(authFile, 'utf-8');
+      const authData = JSON.parse(authContent);
+      return authData.password === password;
+    } catch (e) {
+      console.error('Error during authentication:', e);
+      return false;
+    }
+  }
+
+  public readUser(username: string): DatabaseSchema {
+    this.ensureDirectories();
+    const cleanUsername = username.trim().toLowerCase();
+    const progressFile = path.join(USERS_DIR, `${cleanUsername}_progress.json`);
+
+    try {
+      if (fs.existsSync(progressFile)) {
+        const content = fs.readFileSync(progressFile, 'utf-8');
+        return JSON.parse(content) as DatabaseSchema;
+      }
     } catch (error) {
-      console.error('Error reading progress database:', error);
-      // Fallback
-      return {
-        profile: null,
-        roadmap: [],
-        commits: [],
-        resumeProjects: [],
-        weeklyReports: [],
-        lastUpdate: new Date().toISOString()
-      };
+      console.error(`Error reading progress for user ${cleanUsername}:`, error);
     }
+
+    return {
+      profile: null,
+      roadmap: [],
+      commits: [],
+      resumeProjects: [],
+      weeklyReports: [],
+      lastUpdate: new Date().toISOString()
+    };
   }
 
-  public write(data: Partial<DatabaseSchema>): void {
+  public writeUser(username: string, data: Partial<DatabaseSchema>): void {
+    this.ensureDirectories();
+    const cleanUsername = username.trim().toLowerCase();
+    const progressFile = path.join(USERS_DIR, `${cleanUsername}_progress.json`);
+
     try {
-      const current = this.read();
+      const current = this.readUser(cleanUsername);
       const updated: DatabaseSchema = {
         profile: data.profile !== undefined ? data.profile : current.profile,
         roadmap: data.roadmap !== undefined ? data.roadmap : current.roadmap,
@@ -84,18 +140,19 @@ export class DatabaseManager {
         lastUpdate: new Date().toISOString()
       };
 
-      // Atomic write using temp file to avoid file corruption
-      const tempFile = `${DB_FILE}.tmp`;
+      const tempFile = `${progressFile}.tmp`;
       fs.writeFileSync(tempFile, JSON.stringify(updated, null, 2), 'utf-8');
-      fs.renameSync(tempFile, DB_FILE);
-
-      this.cache = updated;
+      fs.renameSync(tempFile, progressFile);
     } catch (error) {
-      console.error('Error writing to progress database:', error);
+      console.error(`Error writing progress for user ${cleanUsername}:`, error);
     }
   }
 
-  public reset(): void {
+  public resetUser(username: string): void {
+    this.ensureDirectories();
+    const cleanUsername = username.trim().toLowerCase();
+    const progressFile = path.join(USERS_DIR, `${cleanUsername}_progress.json`);
+
     const freshSchema: DatabaseSchema = {
       profile: null,
       roadmap: [],
@@ -104,7 +161,11 @@ export class DatabaseManager {
       weeklyReports: [],
       lastUpdate: new Date().toISOString()
     };
-    fs.writeFileSync(DB_FILE, JSON.stringify(freshSchema, null, 2), 'utf-8');
-    this.cache = freshSchema;
+
+    try {
+      fs.writeFileSync(progressFile, JSON.stringify(freshSchema, null, 2), 'utf-8');
+    } catch (error) {
+      console.error(`Error resetting database for user ${cleanUsername}:`, error);
+    }
   }
 }

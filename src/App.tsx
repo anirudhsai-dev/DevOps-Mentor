@@ -15,10 +15,13 @@ import GitHubTracker from './components/GitHubTracker';
 import ResumeBuilder from './components/ResumeBuilder';
 import AIMentorView from './components/AIMentorView';
 import ReportsCenter from './components/ReportsCenter';
+import AuthScreen from './components/AuthScreen';
 import { DashboardData, RoadmapDay } from './types';
 import { RefreshCw, Terminal, Cpu, Sparkles } from 'lucide-react';
 
 export default function App() {
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('devops_mentor_token'));
+  const [username, setUsername] = useState<string | null>(() => localStorage.getItem('devops_mentor_username'));
   const [isSetup, setIsSetup] = useState<boolean | null>(null);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
@@ -26,11 +29,32 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    checkSetupState();
+    if (token) {
+      checkSetupState();
+    } else {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      localStorage.removeItem('devops_mentor_token');
+      localStorage.removeItem('devops_mentor_username');
+      setToken(null);
+      setUsername(null);
+      setIsSetup(null);
+      setDashboardData(null);
+      setRoadmap([]);
+    };
+    window.addEventListener('devops_mentor_unauthorized', handleUnauthorized);
+    return () => {
+      window.removeEventListener('devops_mentor_unauthorized', handleUnauthorized);
+    };
   }, []);
 
   const checkSetupState = async () => {
     try {
+      setLoading(true);
       const response = await fetch('/api/profile');
       if (response.ok) {
         const data = await response.json();
@@ -67,6 +91,24 @@ export default function App() {
     }
   };
 
+  const handleAuthSuccess = (newToken: string, newUsername: string) => {
+    localStorage.setItem('devops_mentor_token', newToken);
+    localStorage.setItem('devops_mentor_username', newUsername);
+    setToken(newToken);
+    setUsername(newUsername);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('devops_mentor_token');
+    localStorage.removeItem('devops_mentor_username');
+    setToken(null);
+    setUsername(null);
+    setIsSetup(null);
+    setDashboardData(null);
+    setRoadmap([]);
+    setActiveTab('dashboard');
+  };
+
   const handleSetupComplete = async () => {
     setIsSetup(true);
     setLoading(true);
@@ -91,6 +133,10 @@ export default function App() {
     }
   };
 
+  if (!token) {
+    return <AuthScreen onAuthSuccess={handleAuthSuccess} />;
+  }
+
   if (loading || isSetup === null) {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center font-mono text-xs gap-3">
@@ -112,10 +158,11 @@ export default function App() {
 
       {/* Main system header */}
       <Header
-        operatorName={dashboardData?.profile?.name || 'DevOps Engineer'}
+        operatorName={dashboardData?.profile?.name || username || 'DevOps Engineer'}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onReset={handleReset}
+        onLogout={handleLogout}
       />
 
       {/* Main Container Viewport */}
