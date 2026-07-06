@@ -1,0 +1,6 @@
+{
+  "name": "DevOps Mentor",
+  "description": "A highly-polished 180-day DevOps learning roadmap, smart scheduler, progress tracker, and AI mentor to transition from Production Support to DevOps.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
