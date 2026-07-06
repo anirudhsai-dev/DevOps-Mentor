@@ -5,7 +5,6 @@
 
 import express, { Request, Response } from 'express';
 import path from 'path';
-import { createServer as createViteServer } from 'vite';
 import { DatabaseManager } from './server/database';
 import { generate180DayRoadmap } from './server/roadmap';
 import { PlannerService } from './server/planner';
@@ -478,6 +477,7 @@ async function startServer() {
 
   // --- Mount Vite / Frontend Middleware ---
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa'
