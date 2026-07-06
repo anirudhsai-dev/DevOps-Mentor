@@ -1,4 +1,4 @@
-import { createExpressApp } from '../server';
+import { createExpressApp } from '../app-server';
 import express from 'express';
 
 let app: any;
