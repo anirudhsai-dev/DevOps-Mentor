@@ -18,44 +18,55 @@ export interface DatabaseSchema {
   lastUpdate: string;
 }
 
-// Load Firebase Config dynamically from root configuration
-let firebaseConfig: any = {};
-try {
-  const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
-  if (fs.existsSync(configPath)) {
-    firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+// Initialize Firebase lazily
+let app: any = null;
+let db: any = null;
+
+function getDb(): any {
+  if (!db) {
+    let firebaseConfig: any = {};
+    try {
+      const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
+      if (fs.existsSync(configPath)) {
+        firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      }
+    } catch (e) {
+      console.error('[DatabaseManager] Failed to load firebase-applet-config.json:', e);
+    }
+
+    // Support loading entire Firebase Config as a JSON string from environment variables
+    if (process.env.FIREBASE_CONFIG) {
+      try {
+        firebaseConfig = {
+          ...firebaseConfig,
+          ...JSON.parse(process.env.FIREBASE_CONFIG)
+        };
+      } catch (e) {
+        console.error('[DatabaseManager] Failed to parse FIREBASE_CONFIG environment variable:', e);
+      }
+    }
+
+    // Support individual environment variables (ideal for Vercel)
+    firebaseConfig.apiKey = process.env.FIREBASE_API_KEY || firebaseConfig.apiKey || "";
+    firebaseConfig.authDomain = process.env.FIREBASE_AUTH_DOMAIN || firebaseConfig.authDomain || "";
+    firebaseConfig.projectId = process.env.FIREBASE_PROJECT_ID || firebaseConfig.projectId || "";
+    firebaseConfig.storageBucket = process.env.FIREBASE_STORAGE_BUCKET || firebaseConfig.storageBucket || "";
+    firebaseConfig.messagingSenderId = process.env.FIREBASE_MESSAGING_SENDER_ID || firebaseConfig.messagingSenderId || "";
+    firebaseConfig.appId = process.env.FIREBASE_APP_ID || firebaseConfig.appId || "";
+    firebaseConfig.measurementId = process.env.FIREBASE_MEASUREMENT_ID || firebaseConfig.measurementId || "";
+    firebaseConfig.firestoreDatabaseId = process.env.FIREBASE_FIRESTORE_DATABASE_ID || firebaseConfig.firestoreDatabaseId || "";
+
+    if (!firebaseConfig.apiKey) {
+      throw new Error('Firebase Configuration (apiKey) is missing. Set FIREBASE_CONFIG or FIREBASE_API_KEY environment variables.');
+    }
+
+    app = initializeApp(firebaseConfig);
+    db = firebaseConfig.firestoreDatabaseId 
+      ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+      : getFirestore(app);
   }
-} catch (e) {
-  console.error('[DatabaseManager] Failed to load firebase-applet-config.json:', e);
+  return db;
 }
-
-// Support loading entire Firebase Config as a JSON string from environment variables
-if (process.env.FIREBASE_CONFIG) {
-  try {
-    firebaseConfig = {
-      ...firebaseConfig,
-      ...JSON.parse(process.env.FIREBASE_CONFIG)
-    };
-  } catch (e) {
-    console.error('[DatabaseManager] Failed to parse FIREBASE_CONFIG environment variable:', e);
-  }
-}
-
-// Support individual environment variables (ideal for Vercel)
-firebaseConfig.apiKey = process.env.FIREBASE_API_KEY || firebaseConfig.apiKey || "";
-firebaseConfig.authDomain = process.env.FIREBASE_AUTH_DOMAIN || firebaseConfig.authDomain || "";
-firebaseConfig.projectId = process.env.FIREBASE_PROJECT_ID || firebaseConfig.projectId || "";
-firebaseConfig.storageBucket = process.env.FIREBASE_STORAGE_BUCKET || firebaseConfig.storageBucket || "";
-firebaseConfig.messagingSenderId = process.env.FIREBASE_MESSAGING_SENDER_ID || firebaseConfig.messagingSenderId || "";
-firebaseConfig.appId = process.env.FIREBASE_APP_ID || firebaseConfig.appId || "";
-firebaseConfig.measurementId = process.env.FIREBASE_MEASUREMENT_ID || firebaseConfig.measurementId || "";
-firebaseConfig.firestoreDatabaseId = process.env.FIREBASE_FIRESTORE_DATABASE_ID || firebaseConfig.firestoreDatabaseId || "";
-
-// Initialize Firebase client
-const app = initializeApp(firebaseConfig);
-const db = firebaseConfig.firestoreDatabaseId 
-  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
-  : getFirestore(app);
 
 export class DatabaseManager {
   private static instance: DatabaseManager;
@@ -77,7 +88,7 @@ export class DatabaseManager {
     }
 
     try {
-      const userRef = doc(db, 'users', cleanUsername);
+      const userRef = doc(getDb(), 'users', cleanUsername);
       const userSnap = await getDoc(userRef);
       if (userSnap.exists()) {
         return false; // User already exists
@@ -111,7 +122,7 @@ export class DatabaseManager {
       return false;
     }
     try {
-      const userRef = doc(db, 'users', cleanUsername);
+      const userRef = doc(getDb(), 'users', cleanUsername);
       const userSnap = await getDoc(userRef);
       if (!userSnap.exists()) {
         return false;
@@ -127,7 +138,7 @@ export class DatabaseManager {
   public async readUser(username: string): Promise<DatabaseSchema> {
     const cleanUsername = username.trim().toLowerCase();
     try {
-      const userRef = doc(db, 'users', cleanUsername);
+      const userRef = doc(getDb(), 'users', cleanUsername);
       const userSnap = await getDoc(userRef);
       if (userSnap.exists()) {
         const data = userSnap.data();
@@ -157,7 +168,7 @@ export class DatabaseManager {
   public async writeUser(username: string, data: Partial<DatabaseSchema>): Promise<void> {
     const cleanUsername = username.trim().toLowerCase();
     try {
-      const userRef = doc(db, 'users', cleanUsername);
+      const userRef = doc(getDb(), 'users', cleanUsername);
       const current = await this.readUser(cleanUsername);
       const updated = {
         profile: data.profile !== undefined ? data.profile : current.profile,
@@ -186,7 +197,7 @@ export class DatabaseManager {
     };
 
     try {
-      const userRef = doc(db, 'users', cleanUsername);
+      const userRef = doc(getDb(), 'users', cleanUsername);
       await setDoc(userRef, freshSchema, { merge: true });
     } catch (error) {
       console.error(`Error resetting database for user ${cleanUsername} in Firestore:`, error);
