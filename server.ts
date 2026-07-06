@@ -17,9 +17,8 @@ import { UserProfile, RoadmapDay, CommitLog, ResumeProject, DashboardData } from
 import dotenv from 'dotenv';
 dotenv.config();
 
-async function startServer() {
+export function createExpressApp() {
   const app = express();
-  const PORT = 3000;
   const db = DatabaseManager.getInstance();
 
   app.use(express.json());
@@ -469,6 +468,13 @@ async function startServer() {
     await db.resetUser(username);
     res.json({ message: 'DevOps Mentor reset to factory default state.' });
   });
+
+  return app;
+}
+
+async function startServer() {
+  const app = createExpressApp();
+  const PORT = 3000;
 
   // --- Mount Vite / Frontend Middleware ---
   if (process.env.NODE_ENV !== 'production') {
