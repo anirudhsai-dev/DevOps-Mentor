@@ -60,6 +60,14 @@ let healthCheckPromise: Promise<boolean> | null = null;
 let useLocalFallback = false;
 
 function ensureHealthChecked(): Promise<boolean> {
+  const hostname = window.location.hostname;
+  const isDevContainer = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.run.app') || hostname.endsWith('.google.com');
+
+  if (!isDevContainer) {
+    useLocalFallback = true;
+    return Promise.resolve(true);
+  }
+
   if (!healthCheckPromise) {
     healthCheckPromise = (async () => {
       try {
@@ -89,10 +97,7 @@ function ensureHealthChecked(): Promise<boolean> {
   return healthCheckPromise;
 }
 
-// Start probing health immediately
-ensureHealthChecked();
-
-window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+const customFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
 
   // Only intercept API calls
@@ -538,3 +543,25 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
 
   return originalFetch(input, init);
 };
+
+export function initApiInterceptor() {
+  // Start probing health immediately
+  ensureHealthChecked();
+
+  try {
+    Object.defineProperty(window, 'fetch', {
+      value: customFetch,
+      writable: true,
+      configurable: true,
+      enumerable: true
+    });
+    console.log('[API Interceptor] Successfully initialized window.fetch interception.');
+  } catch (e) {
+    console.warn('[API Interceptor] Failed to define window.fetch via Object.defineProperty. Falling back to direct assignment.', e);
+    try {
+      window.fetch = customFetch;
+    } catch (err) {
+      console.error('[API Interceptor] CRITICAL: Failed to override window.fetch entirely.', err);
+    }
+  }
+}
