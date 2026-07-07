@@ -139,7 +139,7 @@ export class DatabaseManager {
       return true;
     } catch (e) {
       console.error('Error during user registration in Firestore:', e);
-      return false;
+      throw e;
     }
   }
 
@@ -158,7 +158,7 @@ export class DatabaseManager {
       return userData.password === password;
     } catch (e) {
       console.error('Error during authentication in Firestore:', e);
-      return false;
+      throw e;
     }
   }
 
