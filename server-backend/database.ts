@@ -5,8 +5,6 @@
 
 import fs from 'fs';
 import path from 'path';
-import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 import { UserProfile, RoadmapDay, CommitLog, ResumeProject, WeeklyReport } from '../src/types';
 
 export interface DatabaseSchema {
@@ -18,81 +16,11 @@ export interface DatabaseSchema {
   lastUpdate: string;
 }
 
-// Initialize Firebase lazily
-let app: any = null;
-let db: any = null;
+const DATA_DIR = path.join(process.cwd(), 'users-data');
 
-function getDb(): any {
-  if (!db) {
-    let firebaseConfig: any = {};
-    try {
-      let resolvedConfigPath: string | null = null;
-      const candidates: string[] = [];
-
-      try {
-        candidates.push(path.join(process.cwd(), 'firebase-applet-config.json'));
-      } catch (e) {}
-
-      if (typeof __dirname !== 'undefined') {
-        try {
-          candidates.push(path.join(__dirname, 'firebase-applet-config.json'));
-          candidates.push(path.join(__dirname, '..', 'firebase-applet-config.json'));
-          candidates.push(path.join(__dirname, '../..', 'firebase-applet-config.json'));
-          candidates.push(path.join(__dirname, '../../..', 'firebase-applet-config.json'));
-        } catch (e) {}
-      }
-
-      for (const candidate of candidates) {
-        try {
-          if (candidate && fs.existsSync(candidate)) {
-            resolvedConfigPath = candidate;
-            break;
-          }
-        } catch (err) {}
-      }
-
-      if (resolvedConfigPath) {
-        firebaseConfig = JSON.parse(fs.readFileSync(resolvedConfigPath, 'utf-8'));
-        console.log('[DatabaseManager] Successfully loaded firebase config from:', resolvedConfigPath);
-      } else {
-        console.warn('[DatabaseManager] firebase-applet-config.json not found in any candidates.');
-      }
-    } catch (e) {
-      console.error('[DatabaseManager] Failed to load firebase-applet-config.json:', e);
-    }
-
-    // Support loading entire Firebase Config as a JSON string from environment variables
-    if (process.env.FIREBASE_CONFIG) {
-      try {
-        firebaseConfig = {
-          ...firebaseConfig,
-          ...JSON.parse(process.env.FIREBASE_CONFIG)
-        };
-      } catch (e) {
-        console.error('[DatabaseManager] Failed to parse FIREBASE_CONFIG environment variable:', e);
-      }
-    }
-
-    // Support individual environment variables (ideal for Vercel)
-    firebaseConfig.apiKey = process.env.FIREBASE_API_KEY || firebaseConfig.apiKey || "";
-    firebaseConfig.authDomain = process.env.FIREBASE_AUTH_DOMAIN || firebaseConfig.authDomain || "";
-    firebaseConfig.projectId = process.env.FIREBASE_PROJECT_ID || firebaseConfig.projectId || "";
-    firebaseConfig.storageBucket = process.env.FIREBASE_STORAGE_BUCKET || firebaseConfig.storageBucket || "";
-    firebaseConfig.messagingSenderId = process.env.FIREBASE_MESSAGING_SENDER_ID || firebaseConfig.messagingSenderId || "";
-    firebaseConfig.appId = process.env.FIREBASE_APP_ID || firebaseConfig.appId || "";
-    firebaseConfig.measurementId = process.env.FIREBASE_MEASUREMENT_ID || firebaseConfig.measurementId || "";
-    firebaseConfig.firestoreDatabaseId = process.env.FIREBASE_FIRESTORE_DATABASE_ID || firebaseConfig.firestoreDatabaseId || "";
-
-    if (!firebaseConfig.apiKey) {
-      throw new Error('Firebase Configuration (apiKey) is missing. Set FIREBASE_CONFIG or FIREBASE_API_KEY environment variables.');
-    }
-
-    app = initializeApp(firebaseConfig);
-    db = firebaseConfig.firestoreDatabaseId 
-      ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
-      : getFirestore(app);
-  }
-  return db;
+// Synchronously ensure data directory exists
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
 export class DatabaseManager {
@@ -107,21 +35,33 @@ export class DatabaseManager {
     return DatabaseManager.instance;
   }
 
+  private getUserFilePath(username: string): string {
+    const cleanUsername = username.trim().toLowerCase();
+    return path.join(DATA_DIR, `${cleanUsername}.json`);
+  }
+
+  public userExists(username: string): boolean {
+    const cleanUsername = username.trim().toLowerCase();
+    if (!cleanUsername) return false;
+    const filePath = this.getUserFilePath(cleanUsername);
+    return fs.existsSync(filePath);
+  }
+
   public async registerUser(username: string, password: string): Promise<boolean> {
     const cleanUsername = username.trim().toLowerCase();
-    
     if (!cleanUsername || !password) {
       return false;
     }
 
+    const filePath = this.getUserFilePath(cleanUsername);
     try {
-      const userRef = doc(getDb(), 'users', cleanUsername);
-      const userSnap = await getDoc(userRef);
-      if (userSnap.exists()) {
+      if (fs.existsSync(filePath)) {
         return false; // User already exists
       }
 
-      const initialSchema: DatabaseSchema = {
+      const initialData = {
+        username: cleanUsername,
+        password: password, // plain text as requested
         profile: null,
         roadmap: [],
         commits: [],
@@ -130,15 +70,11 @@ export class DatabaseManager {
         lastUpdate: new Date().toISOString()
       };
 
-      await setDoc(userRef, {
-        username: cleanUsername,
-        password: password, // plain text as requested
-        ...initialSchema
-      });
-
+      fs.writeFileSync(filePath, JSON.stringify(initialData, null, 2), 'utf-8');
+      console.log(`[DatabaseManager] Successfully registered user and created JSON: ${cleanUsername}`);
       return true;
     } catch (e) {
-      console.error('Error during user registration in Firestore:', e);
+      console.error(`Error registering user ${cleanUsername} in JSON file:`, e);
       throw e;
     }
   }
@@ -148,27 +84,29 @@ export class DatabaseManager {
     if (!cleanUsername || !password) {
       return false;
     }
+
+    const filePath = this.getUserFilePath(cleanUsername);
     try {
-      const userRef = doc(getDb(), 'users', cleanUsername);
-      const userSnap = await getDoc(userRef);
-      if (!userSnap.exists()) {
+      if (!fs.existsSync(filePath)) {
         return false;
       }
-      const userData = userSnap.data();
-      return userData.password === password;
+
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      const data = JSON.parse(raw);
+      return data.password === password;
     } catch (e) {
-      console.error('Error during authentication in Firestore:', e);
+      console.error(`Error authenticating user ${cleanUsername} in JSON file:`, e);
       throw e;
     }
   }
 
   public async readUser(username: string): Promise<DatabaseSchema> {
     const cleanUsername = username.trim().toLowerCase();
+    const filePath = this.getUserFilePath(cleanUsername);
     try {
-      const userRef = doc(getDb(), 'users', cleanUsername);
-      const userSnap = await getDoc(userRef);
-      if (userSnap.exists()) {
-        const data = userSnap.data();
+      if (fs.existsSync(filePath)) {
+        const raw = fs.readFileSync(filePath, 'utf-8');
+        const data = JSON.parse(raw);
         return {
           profile: data.profile || null,
           roadmap: data.roadmap || [],
@@ -179,9 +117,10 @@ export class DatabaseManager {
         };
       }
     } catch (error) {
-      console.error(`Error reading progress for user ${cleanUsername} from Firestore:`, error);
+      console.error(`Error reading data for user ${cleanUsername} from JSON file:`, error);
     }
 
+    // Return empty default state if not found (but registration handles this)
     return {
       profile: null,
       roadmap: [],
@@ -194,10 +133,22 @@ export class DatabaseManager {
 
   public async writeUser(username: string, data: Partial<DatabaseSchema>): Promise<void> {
     const cleanUsername = username.trim().toLowerCase();
+    const filePath = this.getUserFilePath(cleanUsername);
     try {
-      const userRef = doc(getDb(), 'users', cleanUsername);
-      const current = await this.readUser(cleanUsername);
+      let current: any = {};
+      if (fs.existsSync(filePath)) {
+        const raw = fs.readFileSync(filePath, 'utf-8');
+        current = JSON.parse(raw);
+      } else {
+        // Fallback user container
+        current = {
+          username: cleanUsername,
+          password: 'password', // default password
+        };
+      }
+
       const updated = {
+        ...current,
         profile: data.profile !== undefined ? data.profile : current.profile,
         roadmap: data.roadmap !== undefined ? data.roadmap : current.roadmap,
         commits: data.commits !== undefined ? data.commits : current.commits,
@@ -206,28 +157,36 @@ export class DatabaseManager {
         lastUpdate: new Date().toISOString()
       };
 
-      await setDoc(userRef, updated, { merge: true });
+      fs.writeFileSync(filePath, JSON.stringify(updated, null, 2), 'utf-8');
+      console.log(`[DatabaseManager] Successfully updated JSON for user: ${cleanUsername}`);
     } catch (error) {
-      console.error(`Error writing progress for user ${cleanUsername} to Firestore:`, error);
+      console.error(`Error writing data for user ${cleanUsername} to JSON file:`, error);
     }
   }
 
   public async resetUser(username: string): Promise<void> {
     const cleanUsername = username.trim().toLowerCase();
-    const freshSchema = {
-      profile: null,
-      roadmap: [],
-      commits: [],
-      resumeProjects: [],
-      weeklyReports: [],
-      lastUpdate: new Date().toISOString()
-    };
-
+    const filePath = this.getUserFilePath(cleanUsername);
     try {
-      const userRef = doc(getDb(), 'users', cleanUsername);
-      await setDoc(userRef, freshSchema, { merge: true });
+      if (fs.existsSync(filePath)) {
+        const raw = fs.readFileSync(filePath, 'utf-8');
+        const current = JSON.parse(raw);
+        
+        const resetData = {
+          ...current,
+          profile: null,
+          roadmap: [],
+          commits: [],
+          resumeProjects: [],
+          weeklyReports: [],
+          lastUpdate: new Date().toISOString()
+        };
+
+        fs.writeFileSync(filePath, JSON.stringify(resetData, null, 2), 'utf-8');
+        console.log(`[DatabaseManager] Successfully reset JSON file for user: ${cleanUsername}`);
+      }
     } catch (error) {
-      console.error(`Error resetting database for user ${cleanUsername} in Firestore:`, error);
+      console.error(`Error resetting JSON file for user ${cleanUsername}:`, error);
     }
   }
 }

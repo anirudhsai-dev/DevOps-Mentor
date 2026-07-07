@@ -4,16 +4,17 @@
  */
 
 import React from 'react';
-import { Terminal, RefreshCw, BarChart2, Calendar, FileText, Code2, Cpu, Sparkles } from 'lucide-react';
+import { Terminal, RefreshCw, BarChart2, Calendar, FileText, Code2, Cpu, Sparkles, LogOut } from 'lucide-react';
 
 interface HeaderProps {
   operatorName: string;
   activeTab: string;
   setActiveTab: (tab: string) => void;
   onReset: () => void;
+  onLogout?: () => void;
 }
 
-export default function Header({ operatorName, activeTab, setActiveTab, onReset }: HeaderProps) {
+export default function Header({ operatorName, activeTab, setActiveTab, onReset, onLogout }: HeaderProps) {
   const navItems = [
     { id: 'dashboard', label: 'Console', icon: Cpu },
     { id: 'roadmap', label: '180-Day Syllabus', icon: Calendar },
@@ -68,7 +69,7 @@ export default function Header({ operatorName, activeTab, setActiveTab, onReset 
             })}
           </nav>
 
-          {/* Utilities: Reset */}
+          {/* Utilities: Reset & Logout */}
           <div className="flex items-center gap-2">
             <button
               onClick={onReset}
@@ -78,6 +79,16 @@ export default function Header({ operatorName, activeTab, setActiveTab, onReset 
               <RefreshCw className="w-3.5 h-3.5" />
               <span>RESET</span>
             </button>
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="px-2.5 py-1.5 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/50 text-zinc-500 hover:text-zinc-200 rounded text-xs font-mono transition-all flex items-center gap-1.5 cursor-pointer"
+                title="End current terminal session"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>LOGOUT</span>
+              </button>
+            )}
           </div>
 
         </div>

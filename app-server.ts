@@ -35,6 +35,13 @@ export function createExpressApp() {
       return;
     }
     const username = token.substring(6); // Remove "token_" prefix
+    
+    // Check if user exists in the local JSON storage
+    if (!db.userExists(username)) {
+      res.status(401).json({ error: 'Unauthorized: User not found.' });
+      return;
+    }
+
     (req as any).username = username;
     next();
   };

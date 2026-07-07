@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import SetupScreen from './components/SetupScreen';
+import AuthScreen from './components/AuthScreen';
 import Header from './components/Header';
 import DailyCheckIn from './components/DailyCheckIn';
 import DashboardStats from './components/DashboardStats';
@@ -20,20 +21,10 @@ import { RefreshCw, Terminal, Cpu, Sparkles } from 'lucide-react';
 
 export default function App() {
   const [token, setToken] = useState<string | null>(() => {
-    let t = localStorage.getItem('devops_mentor_token');
-    if (!t) {
-      t = 'token_default_user';
-      localStorage.setItem('devops_mentor_token', t);
-    }
-    return t;
+    return localStorage.getItem('devops_mentor_token');
   });
   const [username, setUsername] = useState<string | null>(() => {
-    let u = localStorage.getItem('devops_mentor_username');
-    if (!u) {
-      u = 'default_user';
-      localStorage.setItem('devops_mentor_username', u);
-    }
-    return u;
+    return localStorage.getItem('devops_mentor_username');
   });
   const [isSetup, setIsSetup] = useState<boolean | null>(null);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -104,7 +95,23 @@ export default function App() {
     }
   };
 
+  const handleAuthSuccess = (newToken: string, newUsername: string) => {
+    localStorage.setItem('devops_mentor_token', newToken);
+    localStorage.setItem('devops_mentor_username', newUsername);
+    setToken(newToken);
+    setUsername(newUsername);
+  };
 
+  const handleLogout = () => {
+    localStorage.removeItem('devops_mentor_token');
+    localStorage.removeItem('devops_mentor_username');
+    setToken(null);
+    setUsername(null);
+    setIsSetup(null);
+    setDashboardData(null);
+    setRoadmap([]);
+    setActiveTab('dashboard');
+  };
 
   const handleSetupComplete = async () => {
     setIsSetup(true);
@@ -130,7 +137,9 @@ export default function App() {
     }
   };
 
-
+  if (!token) {
+    return <AuthScreen onAuthSuccess={handleAuthSuccess} />;
+  }
 
   if (loading || isSetup === null) {
     return (
@@ -157,6 +166,7 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onReset={handleReset}
+        onLogout={handleLogout}
       />
 
       {/* Main Container Viewport */}
