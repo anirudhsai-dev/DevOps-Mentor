@@ -26,9 +26,36 @@ function getDb(): any {
   if (!db) {
     let firebaseConfig: any = {};
     try {
-      const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
-      if (fs.existsSync(configPath)) {
-        firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      let resolvedConfigPath: string | null = null;
+      const candidates: string[] = [];
+
+      try {
+        candidates.push(path.join(process.cwd(), 'firebase-applet-config.json'));
+      } catch (e) {}
+
+      if (typeof __dirname !== 'undefined') {
+        try {
+          candidates.push(path.join(__dirname, 'firebase-applet-config.json'));
+          candidates.push(path.join(__dirname, '..', 'firebase-applet-config.json'));
+          candidates.push(path.join(__dirname, '../..', 'firebase-applet-config.json'));
+          candidates.push(path.join(__dirname, '../../..', 'firebase-applet-config.json'));
+        } catch (e) {}
+      }
+
+      for (const candidate of candidates) {
+        try {
+          if (candidate && fs.existsSync(candidate)) {
+            resolvedConfigPath = candidate;
+            break;
+          }
+        } catch (err) {}
+      }
+
+      if (resolvedConfigPath) {
+        firebaseConfig = JSON.parse(fs.readFileSync(resolvedConfigPath, 'utf-8'));
+        console.log('[DatabaseManager] Successfully loaded firebase config from:', resolvedConfigPath);
+      } else {
+        console.warn('[DatabaseManager] firebase-applet-config.json not found in any candidates.');
       }
     } catch (e) {
       console.error('[DatabaseManager] Failed to load firebase-applet-config.json:', e);
