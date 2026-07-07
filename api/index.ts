@@ -1,4 +1,5 @@
-import { createExpressApp } from '../app-server';
+// @ts-ignore
+import { createExpressApp } from '../dist/server.cjs';
 
 const app = createExpressApp();
 
